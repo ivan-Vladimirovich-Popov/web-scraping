@@ -1,0 +1,134 @@
+"""
+задача:
+собрать все данные о каллорийности с сайта
+
+"""
+from bs4 import BeautifulSoup
+import requests
+import lxml
+import json
+import csv
+url="https://health-diet.ru/table_calorie/?utm_source=leftMenu&utm_medium=table_calorie"#ссылка на сайт
+headers = {
+    "Accept": "*/*",
+    "User-Agent": "Mozilla/5.0 (iPad; CPU OS 11_0 like Mac OS X) AppleWebKit/604.1.34 (KHTML, like Gecko) Version/11.0 Mobile/15A5341f Safari/604.1"
+}#необязательный аргумент передающий заголовки (делаем для того, что бы показать сайту что мы не бот а обычный пользователь)
+#посмотреть можно во вкладку нетворк в любом из гет запросовв или воспользоваться любой библиотекой для генерации рандомного
+req=requests.get(url,headers=headers)#возвращает результат работы requests
+print(req)
+scr=req.text
+print(scr)
+#print(scr)
+#with open ("index1.html","w",encoding="UTF-8") as file:
+    #file.write(scr)
+#сохранили код страницы в файл так как сайты не любят когда их парсят
+all_calories_element={}
+soup=BeautifulSoup(scr,"lxml")
+fd=soup.find_all(class_="mzr-tc-group-item-href")#нашли общий тег клсасс который объединяет все нужные нам ссылки
+# for i in fd:
+#     i_text=i.text#переменная для текста
+#     i_href='https://health-diet.ru'+i.get("href")#переменнаяя для ссылок c доменным именем
+#     print(f"{i_text}-{i_href}")
+#создали две переменных в которые посместили сслыки и текстовые названия элементов
+
+for i in fd:
+    i_text=i.text#переменная для текста
+    i_href='https://health-diet.ru'+i.get("href")#переменнаяя для ссылок c доменным именем
+    all_calories_element[i_text]=i_href
+
+#print(all_calories_element)
+
+# with open("all_calories_elements.json","w",encoding="UTF-8") as file:
+#     json.dump(all_calories_element,file,indent=4,ensure_ascii=False)
+
+#indent отступ если его убрать данные будут в строку
+#ensure_ascii-не экранирует символы если не убираем при работе с кирилицей (будут проблеммы с чтением)
+count=0
+iteration_count=int(len(all_calories_element))-1
+print(f"Всего итераций {iteration_count}")
+
+with open("all_calories_elements.json",encoding="UTF-8") as file:
+    all_catigories=json.load(file)
+#print(all_catigories)
+for category_name,category_href in all_catigories.items():
+
+    rep=[","," ","-""'"]
+    for i in rep:
+        if i in category_name:
+            categori_name=category_name.replace(i,"_")
+
+    req=requests.get(url=category_href,headers=headers)
+    src=req.text
+    with open(f"data/{count}_{category_name}.html","w",encoding="UTF-8") as file:
+        file.write(src)
+
+    with open(f"data/{count}_{category_name}.html",encoding="UTF-8") as file:
+        src=file.read()
+
+    #прописываем уловие если какая то таблица пустая
+
+    #собираем заголовки таблицы
+    soup=BeautifulSoup(src,"lxml")
+
+    alert_block = soup.find(class_="uk-alert-danger")
+    if alert_block is not None:
+        continue
+    table_head=soup.find(class_="mzr-tc-group-table").find("tr").find_all("th")
+    product=table_head[0].text
+    calories=table_head[1].text
+    protein=table_head[2].text
+    fats=table_head[3].text
+    carbohydrates=table_head[4].text
+    #создаем таблицу
+    with open(f"data/{count}_{category_name}.csv","w",encoding="utf-8-sig",newline="") as file:
+        writer=csv.writer(file,delimiter=";")#второй параметр для нормального отображения в exel
+        writer.writerow(
+            (product,
+             calories,
+             protein,
+             fats,
+             carbohydrates
+             )
+        )
+     #собираем данные о продуктах
+    products_data=soup.find(class_="mzr-tc-group-table").find("tbody").find_all("tr")
+    product_info=[]
+    for i in products_data:
+        product_tds=i.find_all("td")
+        title=product_tds[0].find("a").text
+        calories = product_tds[1].text
+        protein = product_tds[2].text
+        fats = product_tds[3].text
+        carbohydrates = product_tds[4].text
+
+        product_info.append(
+            {"Title": title,
+             "Calories":calories,
+             "Protein":protein,
+             "Fats":fats,
+             "Carbohydrates":carbohydrates
+             }
+
+        )
+
+        #записываем данные в файл указываем виесто w a-append так как мы его дозаписываем
+        with open(f"data/{count}_{category_name}.csv", "a", encoding="utf-8-sig", newline="") as file:
+            writer = csv.writer(file, delimiter=";")  # второй параметр для нормального отображения в exel
+            writer.writerow(
+                (title,
+                 calories,
+                 protein,
+                 fats,
+                 carbohydrates
+                 )
+            )
+        with open(f"data/{count}_{category_name}.json","a",encoding="UTF-8") as file:
+            json.dump(product_info,file,indent=4,ensure_ascii=False)
+    count+=1
+    print(f"Итерация {count} {category_name} записан...")
+    iteration_count-=1
+    if iteration_count==0:
+        print("работа законченна")
+        break
+    print(f"Итерация осталось {iteration_count}")
+
